@@ -31,13 +31,6 @@ engine.setProperty('voice', voices[0].id) # a different voice id might be necess
 
 
 def build_composite_semantic_vector(word_seq,highDimModel):
-    """
-    Function for producing vocablist and model is called in the main loop
-    If an input word (part of word_seq) contains a space (is a sentence with multiple words), then 
-    a composite score is first calculated for this sentence before being added to the overall 
-    composite score. 
-    """
-    ## build composite vector
     getComposite = [0] * 300
     for w1 in word_seq:
         if ' ' in w1:
@@ -72,9 +65,8 @@ def makeSound():
     audio = audio.astype(np.int16)
     return(audio)
 
+
 def getInput():
-    #engine.say("ready")
-    #engine.runAndWait()
     audio = makeSound()
     play_obj = sa.play_buffer(audio, 1, 2, 44100)
     play_obj.wait_done()
@@ -127,7 +119,7 @@ def getResponseOneInput(inputWord):
         stop = False
         #print(w)
         #target.append(w)
-        regex = re.compile('[@_!#$%^&*()<>?/\|}{~:]')
+        regex = re.compile('[@_!#$%^&*()<>?/\|.}{~:]')
         while stop == False:
             newWord = random.choice(semantic_model.wv.index2entity)
             if(regex.search(newWord) == None):
@@ -147,26 +139,26 @@ def getResponseOneInput(inputWord):
 def getResponseCompositeInput(word_seq):
 #Return response word based on a sequence of inputs 
     stop = False
-
-    regex = re.compile('[@_!#$%^&*()<>?/\|}{~:]')
+    regex = re.compile('[@_!#$%^&*()<>?/\|.}{~:]')
     while stop == False:
         targetVector = build_composite_semantic_vector(word_seq, semantic_model)
         newWord = random.choice(semantic_model.wv.index2entity)
         if newWord in semantic_model.vocab:
             if(regex.search(newWord) == None):
-                newVector = semantic_model.get_vector(newWord)
-                distance = spatial.distance.cosine(targetVector, newVector)
-                if (distance > 0.4 and distance < 0.7):
-                    token = nltk.word_tokenize(newWord)
-                    POStag = nltk.pos_tag(token)
-                    if (POStag[0][1] == "NN" or POStag[0][1]=="VB"):
-                        stop=True
-                        return(newWord)
+                if not newWord[0].isupper():
+                    newVector = semantic_model.get_vector(newWord)
+                    distance = spatial.distance.cosine(targetVector, newVector)
+                    if (distance > 0.4 and distance < 0.7):
+                        token = nltk.word_tokenize(newWord)
+                        POStag = nltk.pos_tag(token)
+                        if (POStag[0][1] == "NN" or POStag[0][1]=="VB"):
+                            stop=True
+                            return(newWord)
 
 
 def objectUseCombinationStrategy(word_seq):
     stop = False
-    regex = re.compile('[@_!#$%^&*()<>?/\|}{~:]')
+    regex = re.compile('[@_!#$%^&*()<>?/\|.}{~:]')
     response = [0] * 2
     response[0] = random.choice(word_seq)
     while stop == False:
@@ -174,23 +166,22 @@ def objectUseCombinationStrategy(word_seq):
         newWord = random.choice(semantic_model.wv.index2entity)
         if newWord in semantic_model.vocab:
             if(regex.search(newWord) == None):
-                newVector = semantic_model.get_vector(newWord)
-                distance = spatial.distance.cosine(targetVector, newVector)
-                if (distance > 0.4 and distance < 0.7):
-                    token = nltk.word_tokenize(newWord)
-                    POStag = nltk.pos_tag(token)
-                    if (POStag[0][1] == "NN" or POStag[0][1]=="VB"):
-                        stop=True
-                        response[1] = newWord
-                        return(response)
+                if not newWord[0].isupper():
+                    newVector = semantic_model.get_vector(newWord)
+                    distance = spatial.distance.cosine(targetVector, newVector)
+                    if (distance > 0.4 and distance < 0.7):
+                        token = nltk.word_tokenize(newWord)
+                        POStag = nltk.pos_tag(token)
+                        if (POStag[0][1] == "NN" or POStag[0][1]=="VB"):
+                            stop=True
+                            response[1] = newWord
+                            return(response)
 
 def broadUseCategoryStrategy(word_seq):
-    #stop = False
-    regex = re.compile('[@!#$%^&*()<>?/\|}{~:]')
+    regex = re.compile('[@!#$%^&*()<>?/\|.}{~:]')
     vectors = getVectors(word_seq)
-    similarWords = semantic_model.most_similar(positive=vectors, negative=[targetWord],topn = 200)
+    similarWords = semantic_model.most_similar(positive=vectors, negative=[targetWord],topn = 300)
     similarWords = [w for w in similarWords if w[0] not in word_seq]
-    #while stop == False:
     words = []
     for w in similarWords:
         word = w[0]
@@ -201,8 +192,9 @@ def broadUseCategoryStrategy(word_seq):
                     POStag = nltk.pos_tag(token)
                     if (POStag[0][1] == "NN" or POStag[0][1]=="VB"):
                         stop=True
-                        words += [word]                      
-    return(words[0:5])
+                        words += [word]           
+    response = random.choice(words)           
+    return(response)
     #Returns a list of words 
 
 def propertyUseStrategy(targetWord):
@@ -211,14 +203,23 @@ def propertyUseStrategy(targetWord):
     engine.runAndWait()
 
     textInput = getInput()
+
     vectors = getVectors(textInput)
 
-    newWord = semantic_model.most_similar(positive=vectors, negative=[targetWord])
+    newWords = semantic_model.most_similar(positive=vectors, negative=[targetWord], topn=300)
+    newWord = []
+    regex = re.compile('[@!#$%^&*()<>?/\|.}{~:]')
+    for w in newWords: 
+        if(regex.search(w[0]) == None):
+            if len(w[0]) > 3: 
+                if not w[0][0].isupper():
+                    token = nltk.word_tokenize(w[0])
+                    POStag = nltk.pos_tag(token)
+                    if (POStag[0][1]=="NN" or POStag[0][1]=="VB"):
+                        newWord = newWord + [w[0]]
+
     newWord = random.choice(newWord)
-    newWord = newWord[0]
-
-    response = textInput + ' is related to ' + newWord
-
+    response = newWord
     return(response)
 
 
@@ -227,32 +228,26 @@ def propertyUseStrategy(targetWord):
 ############################################################################
 
 
-targetWord = 'book'
+targetWord = 'cup'
 targetVector = semantic_model.get_vector(targetWord)
-textInput = "nothing" # we initialise the input for the loop to work
-rounds = 0
+textInput = "nothing" # initialising loop 
+rounds = 0 # parameter N - the first up to N cues will be associative expansion responses (getResponseCompositeInput())
+batch_size = 3 #Memory capacity of bot
 
 Introduction = 'Hi. I am ready to assist you in the Alternative Uses task.  ' + '  The target object is            ' + targetWord 
-# Introduction: let Paul introduce himself
 engine.say(Introduction)
 engine.runAndWait()
 
 engine.say('         Say stop when you want the task to end.                  Wait for the tone to say an idea you have.           The task will start now')
 engine.runAndWait()
 
-# All interactions happen here
 while textInput != "stop":
-    # We load the speech to text model
+    # Load the speech to text model
     r = sr.Recognizer()
-    # check for background noise and adjust sensitivity accordingly
+    # Check for background noise and adjust sensitivity accordingly
     with mic as source:
         audio = r.adjust_for_ambient_noise(source)
 
-    # Listen for user input
-    #engine.say("I am listening now")
-    #engine.runAndWait()
-
-    batch_size = 5
     word_sequence = [0] * batch_size
 
     for n in range(batch_size):
@@ -268,22 +263,26 @@ while textInput != "stop":
 
     else:
         word_sequence = [w for w in word_sequence if w != "none"] 
-        print(word_sequence)
+        #print(word_sequence)
         if len(word_sequence) > 1:
-            assoCurve = getAssociativeCurve(word_sequence)
-            if assoCurve == "steep":
+            if rounds < 3: 
                 response = getResponseCompositeInput(word_sequence)
-            else: 
-                num = random.randint(1, 3)
-                if num==1: 
-                    response = objectUseCombinationStrategy(word_sequence)
-                    response = ' '.join(response)
-                elif num==2:
-                    response = propertyUseStrategy(targetWord)
+            else:
+                assoCurve = getAssociativeCurve(word_sequence)
+                #print(assoCurve)
+                if assoCurve == "steep":
+                    response = getResponseCompositeInput(word_sequence)
                 else: 
-                    response_list = broadUseCategoryStrategy(word_sequence)
-                    response_list = ' '.join(response_list)
-                    respone = "Other things in the categories " + response_list + " may be relevant"
+                    num = random.randint(1, 3)
+                    #print(num)
+                    if num==1: 
+                        response = objectUseCombinationStrategy(word_sequence)
+                        response = ' '.join(response)
+                    elif num==2:
+                        response = propertyUseStrategy(targetWord)
+                    else: 
+                        response = broadUseCategoryStrategy(word_sequence)
+
         else: 
             response = 'I did not catch enough words'
     
